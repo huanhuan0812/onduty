@@ -52,6 +52,11 @@ public:
         connect(pptCheckTimer, &QTimer::timeout, this, &DutyRosterApp::checkForPowerPointShow);
         pptCheckTimer->start(1500); // 每1.5秒检测一次
 
+        // 设置30分钟检查定时器
+        dutyCheckTimer = new QTimer(this);
+        connect(dutyCheckTimer, &QTimer::timeout, this, &DutyRosterApp::checkDutyPeriodically);
+        dutyCheckTimer->start(30 * 60 * 1000); // 每30分钟检查一次
+
         // 启用鼠标跟踪
         setMouseTracking(true);
     }
@@ -210,6 +215,22 @@ private slots:
             positionToTopRight();
             wasHiddenByPPT = false;
             qDebug() << "PowerPoint放映结束，显示窗口";
+        }
+    }
+
+    // 定期检查值日更新
+    void checkDutyPeriodically()
+    {
+        if (checkAndUpdateDuty()) {
+            qDebug() << "定期检查：值日已更新 -" << QDateTime::currentDateTime().toString();
+            updateDisplay();
+
+            // 可选：显示通知消息
+            if (trayIcon && trayIcon->isVisible()) {
+                trayIcon->showMessage("值日已更新",
+                    QString("已自动更新值日安排\n%1").arg(QDate::currentDate().toString("yyyy-MM-dd dddd")),
+                    QSystemTrayIcon::Information, 3000);
+            }
         }
     }
 
@@ -402,6 +423,7 @@ private:
     QLabel *duty2Label;
     QSystemTrayIcon *trayIcon;
     QTimer *pptCheckTimer;
+    QTimer *dutyCheckTimer;  // 新增：值日检查定时器
     QString configFilePath;
     bool wasHiddenByFullscreen = false;
     bool wasHiddenByPPT = false;
