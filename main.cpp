@@ -359,22 +359,46 @@ private:
     void setupTrayIcon()
     {
         trayIcon = new QSystemTrayIcon(this);
-        trayIcon->setIcon(QIcon::fromTheme("preferences-system"));
+        trayIcon->setIcon(QIcon(":/board.png")); // 替换为你的图标路径
+        trayIcon->setToolTip("值日安排");
+
+
 
         QMenu *trayMenu = new QMenu(this);
-        QAction *toggleAction = new QAction("显示/隐藏", this);
-        QAction *updateAction = new QAction("手动更新值日", this);
+        QAction *rotateAction = new QAction("更新值日", this);
+        QAction *toggleAction = new QAction("显示/隐藏窗口", this);
         QAction *quitAction = new QAction("退出", this);
 
-        connect(toggleAction, &QAction::triggered, this, &DutyRosterApp::toggleVisibility);
-        connect(updateAction, &QAction::triggered, this, &DutyRosterApp::rotateDuty);
-        connect(quitAction, &QAction::triggered, this, &DutyRosterApp::quitApplication);
-        connect(trayIcon, &QSystemTrayIcon::activated, this, &DutyRosterApp::iconActivated);
+        connect(trayIcon, &QSystemTrayIcon::activated, this, [=](QSystemTrayIcon::ActivationReason reason){
+        if (reason == QSystemTrayIcon::Trigger) // 左键单击
+        {
+            // 获取托盘图标的位置并显示菜单
+            QPoint pos = QCursor::pos();
+            trayMenu->popup(pos);
+        }
+    });
 
+        connect(rotateAction, &QAction::triggered, this, [=]() {
+            currentDutyIndex1 = (currentDutyIndex1 + 2) % 47;
+            currentDutyIndex2 = (currentDutyIndex2 + 2) % 47;
+            // 确保两个人不同
+            if (currentDutyIndex1 == currentDutyIndex2)
+                currentDutyIndex2 = (currentDutyIndex2 + 1) % 47;
+
+            // 保存配置
+            saveConfig();
+            updateDisplay();
+        });
+        connect(toggleAction, &QAction::triggered, this, &DutyRosterApp::toggleVisibility);
+        connect(quitAction, &QAction::triggered, this, &DutyRosterApp::quitApplication);
+
+        trayMenu->addAction(rotateAction);
         trayMenu->addAction(toggleAction);
-        trayMenu->addAction(updateAction);
+        trayMenu->addSeparator();
         trayMenu->addAction(quitAction);
+
         trayIcon->setContextMenu(trayMenu);
+        connect(trayIcon, &QSystemTrayIcon::activated, this, &DutyRosterApp::iconActivated);
         trayIcon->show();
     }
 

@@ -2,6 +2,9 @@ cmake_minimum_required(VERSION 3.30)
 
 project(onduty VERSION 0.1 LANGUAGES CXX)
 
+set(CMAKE_INCLUDE_CURRENT_DIR ON)
+
+
 set(CMAKE_AUTOUIC ON)
 set(CMAKE_AUTOMOC ON)
 set(CMAKE_AUTORCC ON)
@@ -14,6 +17,7 @@ find_package(Qt${QT_VERSION_MAJOR} REQUIRED COMPONENTS Widgets Core Gui)
 
 set(PROJECT_SOURCES
         main.cpp
+        icon.qrc
 )
 
 if(${QT_VERSION_MAJOR} GREATER_EQUAL 6)
