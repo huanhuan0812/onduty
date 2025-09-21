@@ -295,6 +295,8 @@ private:
 
                 // 更新日期
                 lastUpdateDate = todayStr;
+                originIndex1 = currentDutyIndex1;
+                originIndex2 = currentDutyIndex2;
 
                 // 保存配置
                 saveConfig();
@@ -313,7 +315,7 @@ private:
         //setAttribute(Qt::WA_TransparentForMouseEvents, true);
 
         QWidget *mainWidget = new QWidget(this);
-        mainWidget->setStyleSheet("QWidget { background-color: rgba(255, 255, 255, 200); border-radius: 10px; border: 2px solid #dddddd; }");
+        mainWidget->setStyleSheet("background-color: rgba(255, 255, 255, 200); border-radius: 10px; border: 2px solid #dddddd;");
 
         QVBoxLayout *mainLayout = new QVBoxLayout(mainWidget);
         QVBoxLayout *outerLayout = new QVBoxLayout(this);
@@ -365,7 +367,9 @@ private:
 
 
         QMenu *trayMenu = new QMenu(this);
-        QAction *rotateAction = new QAction("更新值日", this);
+        QAction *lastDutyAction=new QAction("上一组值日",this);
+        QAction *rotateAction = new QAction("下一组值日", this);
+        QAction *BackupAction = new QAction("恢复", this);
         QAction *toggleAction = new QAction("显示/隐藏窗口", this);
         QAction *quitAction = new QAction("退出", this);
 
@@ -377,6 +381,17 @@ private:
             trayMenu->popup(pos);
         }
     });
+
+        connect(lastDutyAction, &QAction::triggered, this, [=]()
+        {
+            currentDutyIndex1 = (currentDutyIndex1 - 2);
+            currentDutyIndex2 = (currentDutyIndex2 - 2);
+            if (currentDutyIndex1<0)currentDutyIndex1+=47;
+            if (currentDutyIndex2<0)currentDutyIndex2+=47;
+            saveConfig();
+            updateDisplay();
+
+        });
 
         connect(rotateAction, &QAction::triggered, this, [=]() {
             currentDutyIndex1 = (currentDutyIndex1 + 2) % 47;
@@ -392,7 +407,16 @@ private:
         connect(toggleAction, &QAction::triggered, this, &DutyRosterApp::toggleVisibility);
         connect(quitAction, &QAction::triggered, this, &DutyRosterApp::quitApplication);
 
+        connect(BackupAction, &QAction::triggered, this, [=](){
+            currentDutyIndex1 = originIndex1;
+            currentDutyIndex2 = originIndex2;
+            saveConfig();
+            updateDisplay();
+        });
+
+        trayMenu->addAction(lastDutyAction);
         trayMenu->addAction(rotateAction);
+        trayMenu->addAction(BackupAction);
         trayMenu->addAction(toggleAction);
         trayMenu->addSeparator();
         trayMenu->addAction(quitAction);
@@ -415,6 +439,7 @@ private:
     {
         duty1Label->setText(QString::number(currentDutyIndex1 + 1));
         duty2Label->setText(QString::number(currentDutyIndex2 + 1));
+        repaint();
     }
 
     void loadConfig()
@@ -424,6 +449,9 @@ private:
         currentDutyIndex1 = config.value("duty/index1", 0).toInt();
         currentDutyIndex2 = config.value("duty/index2", 1).toInt();
         lastUpdateDate = config.value("date/lastUpdate", "").toString();
+
+        originIndex1 = config.value("origin/index1", 0).toInt();
+        originIndex2 = config.value("origin/index2", 1).toInt();
 
         // 如果配置文件不存在，创建默认配置
         if (!QFile::exists(configFilePath)) {
@@ -439,6 +467,9 @@ private:
         config.setValue("duty/index2", currentDutyIndex2);
         config.setValue("date/lastUpdate", lastUpdateDate);
 
+        config.setValue("origin/index1", originIndex1);
+        config.setValue("origin/index2", originIndex2);
+
         config.sync();
     }
 
@@ -452,6 +483,7 @@ private:
     bool wasHiddenByFullscreen = false;
     bool wasHiddenByPPT = false;
     QGraphicsOpacityEffect *opacityEffect;  // 添加透明度效果对象
+    int originIndex1=0, originIndex2=1;
 
     int currentDutyIndex1 = 0;
     int currentDutyIndex2 = 1;
