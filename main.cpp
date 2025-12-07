@@ -133,13 +133,14 @@ protected:
     {
         // 常用NTP服务器列表（按优先级排序）
         QStringList ntpServers = {
+            "cn.pool.ntp.org"       // 中国NTP池
+            "ntp.aliyun.com",       // 阿里云
+            "ntp1.aliyun.com",      // 阿里云备用
             "time.google.com",      // Google时间服务器
             "time.windows.com",     // Windows时间服务器
             "pool.ntp.org",         // NTP池
             "time.apple.com",       // Apple时间服务器
-            "ntp.aliyun.com",       // 阿里云
-            "ntp1.aliyun.com",      // 阿里云备用
-            "cn.pool.ntp.org"       // 中国NTP池
+            
         };
     
         // 尝试每个服务器
