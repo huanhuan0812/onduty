@@ -15,12 +15,17 @@
 #include <QFileInfo>
 #include <QDate>
 #include <QWindow>
-#include <windows.h>
 #include <QTimer>
 #include <QScreen>
 #include <QPropertyAnimation>
 #include <QGraphicsOpacityEffect>
-#include <QEnterEvent>  // 添加此头文件用于鼠标进入事件
+#include <QUdpSocket>
+#ifdef Q_OS_WIN
+#include <windows.h>
+#endif
+#ifdef Q_OS_MAC
+//#include <AppKit/AppKit.h>
+#endif
 
 class DutyRosterApp : public QWidget
 {
@@ -67,6 +72,91 @@ public:
     }
 
 protected:
+    QDate getDateFromNtp(const QString &server = "time.google.com", int timeout = 3000)
+    {
+        QUdpSocket socket;
+    
+        // 连接到NTP服务器
+        socket.connectToHost(server, 123, QIODevice::ReadWrite);
+    
+        // 等待连接
+        if (!socket.waitForConnected(timeout)) {
+            qWarning() << "Failed to connect to NTP server:" << server;
+            return QDate();  // 返回无效日期
+        }
+    
+        // 构造NTP请求数据包（48字节）
+        QByteArray ntpRequest(48, 0);
+        // 设置NTP协议头：版本4，客户端模式
+        ntpRequest[0] = 0x1B;  // LI=0, Version=4, Mode=3 (客户端)
+    
+        // 发送请求
+        if (socket.write(ntpRequest) != ntpRequest.size()) {
+            qWarning() << "Failed to send NTP request";
+            return QDate();
+        }
+    
+        // 等待响应
+        if (!socket.waitForReadyRead(timeout)) {
+            qWarning() << "NTP response timeout";
+            return QDate();
+        }
+    
+        // 读取响应
+        QByteArray response = socket.readAll();
+        if (response.size() < 48) {
+            qWarning() << "Invalid NTP response size:" << response.size();
+            return QDate();
+        }
+    
+        // 解析NTP时间戳（第40-43字节：从1900年1月1日开始的秒数）
+        quint32 secondsSince1900 = 
+            ((quint8)response[40] << 24) |
+            ((quint8)response[41] << 16) |
+            ((quint8)response[42] << 8) |
+            (quint8)response[43];
+    
+        // NTP时间戳（1900年1月1日）到Unix时间戳（1970年1月1日）的偏移量
+        const quint64 ntpToUnixOffset = 2208988800ULL;
+    
+        // 转换为Unix时间戳
+        qint64 unixTimestamp = secondsSince1900 - ntpToUnixOffset;
+    
+        // 转换为QDateTime（UTC时间）
+        QDateTime dateTime = QDateTime::fromSecsSinceEpoch(unixTimestamp);
+    
+        // 返回QDate部分
+        return dateTime.date();
+    }
+
+    QDate getCurrentDate(int timeout = 2000)
+    {
+        // 常用NTP服务器列表（按优先级排序）
+        QStringList ntpServers = {
+            "time.google.com",      // Google时间服务器
+            "time.windows.com",     // Windows时间服务器
+            "pool.ntp.org",         // NTP池
+            "time.apple.com",       // Apple时间服务器
+            "ntp.aliyun.com",       // 阿里云
+            "ntp1.aliyun.com",      // 阿里云备用
+            "cn.pool.ntp.org"       // 中国NTP池
+        };
+    
+        // 尝试每个服务器
+        for (const QString &server : ntpServers) {
+            QDate date = getDateFromNtp(server, timeout);
+            if (date.isValid()) {
+                qDebug() << "Successfully got date from" << server << ":" << date.toString("yyyy-MM-dd");
+                return date;
+            }
+            qWarning() << "Failed to get date from" << server;
+        }
+    
+        qWarning() << "All NTP servers failed";
+        return QDate::currentDate();  // 返回系统日期
+    }
+
+
     void closeEvent(QCloseEvent *event) override
     {
         if (trayIcon->isVisible()) {
@@ -93,26 +183,13 @@ protected:
         return QWidget::eventFilter(watched, event);
     }
 
-    // 添加鼠标进入事件处理
-    void enterEvent(QEnterEvent *event) override
-    {
-        QWidget::enterEvent(event);
-        animateOpacity(0.1);  // 鼠标移入时变为几乎透明
-    }
-
-    // 添加鼠标离开事件处理
-    void leaveEvent(QEvent *event) override
-    {
-        QWidget::leaveEvent(event);
-        animateOpacity(0.8);  // 鼠标离开时恢复透明度
-    }
 
 private slots:
     void rotateDuty()
     {
         if (checkAndUpdateDuty()) {
             QMessageBox::information(this, "值日已更新",
-                QString("今天是%1，已更新值日安排。").arg(QDate::currentDate().toString("yyyy-MM-dd dddd")));
+                QString("今天是%1，已更新值日安排。").arg(getCurrentDate().toString("yyyy-MM-dd dddd")));
         } else {
             QMessageBox::information(this, "提示", "今天的值日已经安排过了或今天是周末!");
         }
@@ -222,13 +299,13 @@ private slots:
     void checkDutyPeriodically()
     {
         if (checkAndUpdateDuty()) {
-            qDebug() << "定期检查：值日已更新 -" << QDateTime::currentDateTime().toString();
+            //qDebug() << "定期检查：值日已更新 -" << QDateTime::currentDateTime().toString();
             updateDisplay();
 
             // 可选：显示通知消息
             if (trayIcon && trayIcon->isVisible()) {
                 trayIcon->showMessage("值日已更新",
-                    QString("已自动更新值日安排\n%1").arg(QDate::currentDate().toString("yyyy-MM-dd dddd")),
+                    QString("已自动更新值日安排\n%1").arg(getCurrentDate().toString("yyyy-MM-dd dddd")),
                     QSystemTrayIcon::Information, 3000);
             }
         }
@@ -249,6 +326,7 @@ private:
     // 检测PowerPoint是否正在放映
     bool isPowerPointShowing()
     {
+        #ifdef Q_OS_WIN 
         // 方法1: 查找PowerPoint幻灯片放映窗口
         HWND hwnd = FindWindowW(L"screenClass", L"PowerPoint 幻灯片放映");
         if (hwnd && IsWindowVisible(hwnd)) {
@@ -270,11 +348,15 @@ private:
         }
 
         return false;
+        #else
+        // 非Windows平台暂不支持
+        return false;
+        #endif
     }
 
     bool checkAndUpdateDuty()
     {
-        QDate today = QDate::currentDate();
+        QDate today = getCurrentDate();
         QString todayStr = today.toString("yyyyMMdd");
 
         // 检查是否是工作日（周一到周五）
@@ -367,6 +449,7 @@ private:
 
 
         QMenu *trayMenu = new QMenu(this);
+        QAction *updateAction = new QAction("刷新", this);
         QAction *lastDutyAction=new QAction("上一组值日",this);
         QAction *rotateAction = new QAction("下一组值日", this);
         QAction *BackupAction = new QAction("恢复", this);
@@ -381,11 +464,12 @@ private:
             trayMenu->popup(pos);
         }
     });
+        connect(updateAction, &QAction::triggered, this, &DutyRosterApp::checkAndUpdateDuty);
 
         connect(lastDutyAction, &QAction::triggered, this, [=]()
         {
-            currentDutyIndex1 = (currentDutyIndex1 - 2);
-            currentDutyIndex2 = (currentDutyIndex2 - 2);
+            currentDutyIndex1 -=2 ;
+            currentDutyIndex2 -= 2;
             if (currentDutyIndex1<0)currentDutyIndex1+=47;
             if (currentDutyIndex2<0)currentDutyIndex2+=47;
             saveConfig();
@@ -414,6 +498,7 @@ private:
             updateDisplay();
         });
 
+        trayMenu->addAction(updateAction);
         trayMenu->addAction(lastDutyAction);
         trayMenu->addAction(rotateAction);
         trayMenu->addAction(BackupAction);
@@ -484,7 +569,6 @@ private:
     bool wasHiddenByPPT = false;
     QGraphicsOpacityEffect *opacityEffect;  // 添加透明度效果对象
     int originIndex1=0, originIndex2=1;
-
     int currentDutyIndex1 = 0;
     int currentDutyIndex2 = 1;
     QString lastUpdateDate;
