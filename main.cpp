@@ -32,15 +32,18 @@ class DutyRosterApp : public QWidget
     Q_OBJECT
 
 public:
+    bool isTestingMode = false;//考试模式
     DutyRosterApp(QWidget *parent = nullptr) : QWidget(parent)
     {
         // 设置配置文件路径为程序同目录
         configFilePath = QCoreApplication::applicationDirPath() + "/duty_config.ini";
         setAttribute(Qt::WA_TransparentForMouseEvents, true);
+        loadConfig();
         setupUI();
         setupTrayIcon();
-        loadConfig();
-        checkAndUpdateDuty(); // 在启动时检查并更新值日
+        if(!isTestingMode){
+            checkAndUpdateDuty(); // 在启动时检查并更新值日
+        }
         updateDisplay();
         positionToTopRight();
 
@@ -64,6 +67,9 @@ public:
 
         // 启用鼠标跟踪
         setMouseTracking(true);
+        if(isTestingMode){
+            this->hide();
+        }
     }
 
     ~DutyRosterApp()
@@ -361,7 +367,7 @@ private:
         QString todayStr = today.toString("yyyyMMdd");
 
         // 检查是否是工作日（周一到周五）
-        if (today.dayOfWeek() >= 1 && today.dayOfWeek() <= 5)
+        if (today.dayOfWeek() >= 1 && today.dayOfWeek() <= 5 && !isTestingMode)
         {
             // 检查配置文件中是否已经更新过今天的值日
             if (lastUpdateDate != todayStr)
@@ -455,21 +461,82 @@ private:
         QAction *rotateAction = new QAction("下一组值日", this);
         QAction *BackupAction = new QAction("恢复", this);
         QAction *toggleAction = new QAction("显示/隐藏窗口", this);
+        QAction *toggleTestingModeAction = new QAction(this);
+        if(!isTestingMode)
+            toggleTestingModeAction->setText("启用考试模式");
+        else
+            toggleTestingModeAction->setText("禁用考试模式");
         QAction *quitAction = new QAction("退出", this);
 
         connect(trayIcon, &QSystemTrayIcon::activated, this, [=](QSystemTrayIcon::ActivationReason reason){
-        if (reason == QSystemTrayIcon::Trigger) // 左键单击
-        {
-            // 获取托盘图标的位置并显示菜单
-            QPoint pos = QCursor::pos();
-            trayMenu->popup(pos);
+            if (reason == QSystemTrayIcon::Trigger) // 左键单击
+            {
+                // 获取托盘图标的位置并显示菜单
+                QPoint pos = QCursor::pos();
+                trayMenu->popup(pos);
+            }
+        });
+
+        // 初始化考试模式状态
+        if (isTestingMode){
+            toggleTestingModeAction->setText("禁用考试模式");
+            this->hide();
+            wasHiddenByFullscreen=false;
+            wasHiddenByPPT=false;
+            updateAction->setEnabled(false);
+            lastDutyAction->setEnabled(false);
+            rotateAction->setEnabled(false);
+            BackupAction->setEnabled(false);
+            toggleAction->setEnabled(false);
         }
-    });
+        else{
+            toggleTestingModeAction->setText("启用考试模式");
+            this->show();
+            wasHiddenByFullscreen=false;
+            wasHiddenByPPT=false;
+            positionToTopRight();
+            updateAction->setEnabled(true);
+            lastDutyAction->setEnabled(true);
+            rotateAction->setEnabled(true);
+            BackupAction->setEnabled(true);
+            toggleAction->setEnabled(true);
+        }
+
+        connect(toggleTestingModeAction, &QAction::triggered, this, [=]() {
+            isTestingMode = !isTestingMode;
+            if (isTestingMode){
+                toggleTestingModeAction->setText("禁用考试模式");
+                this->hide();
+                wasHiddenByFullscreen=false;
+                wasHiddenByPPT=false;
+                updateAction->setEnabled(false);
+                lastDutyAction->setEnabled(false);
+                rotateAction->setEnabled(false);
+                BackupAction->setEnabled(false);
+                toggleAction->setEnabled(false);
+            }
+            else{
+                toggleTestingModeAction->setText("启用考试模式");
+                this->show();
+                wasHiddenByFullscreen=false;
+                wasHiddenByPPT=false;
+                positionToTopRight();
+                updateAction->setEnabled(true);
+                lastDutyAction->setEnabled(true);
+                rotateAction->setEnabled(true);
+                BackupAction->setEnabled(true);
+                toggleAction->setEnabled(true);
+                this->show();
+                this->positionToTopRight();
+                this->updateDisplay();
+            }
+            saveConfig();
+        });
         connect(updateAction, &QAction::triggered, this, &DutyRosterApp::checkAndUpdateDuty);
 
         connect(lastDutyAction, &QAction::triggered, this, [=]()
         {
-            currentDutyIndex1 -=2 ;
+            currentDutyIndex1 -= 2 ;
             currentDutyIndex2 -= 2;
             if (currentDutyIndex1<0)currentDutyIndex1+=47;
             if (currentDutyIndex2<0)currentDutyIndex2+=47;
@@ -493,10 +560,12 @@ private:
         connect(quitAction, &QAction::triggered, this, &DutyRosterApp::quitApplication);
 
         connect(BackupAction, &QAction::triggered, this, [=](){
-            currentDutyIndex1 = originIndex1;
-            currentDutyIndex2 = originIndex2;
-            saveConfig();
-            updateDisplay();
+            if(isTestingMode){
+                currentDutyIndex1 = originIndex1;
+                currentDutyIndex2 = originIndex2;
+                saveConfig();
+                updateDisplay();
+            }
         });
 
         trayMenu->addAction(updateAction);
@@ -504,6 +573,7 @@ private:
         trayMenu->addAction(rotateAction);
         trayMenu->addAction(BackupAction);
         trayMenu->addAction(toggleAction);
+        trayMenu->addAction(toggleTestingModeAction);
         trayMenu->addSeparator();
         trayMenu->addAction(quitAction);
 
@@ -539,6 +609,8 @@ private:
         originIndex1 = config.value("origin/index1", 0).toInt();
         originIndex2 = config.value("origin/index2", 1).toInt();
 
+        isTestingMode = config.value("settings/testingMode", false).toBool();
+
         // 如果配置文件不存在，创建默认配置
         if (!QFile::exists(configFilePath)) {
             saveConfig();
@@ -555,6 +627,8 @@ private:
 
         config.setValue("origin/index1", originIndex1);
         config.setValue("origin/index2", originIndex2);
+
+        config.setValue("settings/testingMode", isTestingMode);
 
         config.sync();
     }
@@ -581,8 +655,12 @@ int main(int argc, char *argv[])
     app.setQuitOnLastWindowClosed(false);
 
     DutyRosterApp window;
-    window.show();
-    
+
+    if(!window.isTestingMode)
+        window.show();
+    else
+        window.hide();
+
     return app.exec();
 }
 
