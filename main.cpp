@@ -286,7 +286,7 @@ private slots:
             wasHiddenByPPT = true;
             qDebug() << "检测到PowerPoint放映，隐藏窗口";
         }
-        else if (!isPPTShowing && wasHiddenByPPT && !isVisible()) {
+        else if (!isPPTShowing && wasHiddenByPPT && !isVisible() && !isTestingMode) {
             // PPT放映结束，显示窗口
             show();
             QGraphicsOpacityEffect *opacityEffect = new QGraphicsOpacityEffect(this);
@@ -373,13 +373,13 @@ private:
             if (lastUpdateDate != todayStr)
             {
                 // 轮换值日人员
-                currentDutyIndex1 = (currentDutyIndex1 + 2) % 47;
-                currentDutyIndex2 = (currentDutyIndex2 + 2) % 47;
+                currentDutyIndex1 = (currentDutyIndex1 + 2) % totalPersons;
+                currentDutyIndex2 = (currentDutyIndex2 + 2) % totalPersons;
 
                 // 确保两个人不同
                 while (currentDutyIndex1 == currentDutyIndex2)
                 {
-                    currentDutyIndex2 = (currentDutyIndex2 + 1) % 47;
+                    currentDutyIndex2 = (currentDutyIndex2 + 1) % totalPersons;
                 }
 
                 // 更新日期
@@ -538,19 +538,19 @@ private:
         {
             currentDutyIndex1 -= 2 ;
             currentDutyIndex2 -= 2;
-            if (currentDutyIndex1<0)currentDutyIndex1+=47;
-            if (currentDutyIndex2<0)currentDutyIndex2+=47;
+            if (currentDutyIndex1<0)currentDutyIndex1+=totalPersons;
+            if (currentDutyIndex2<0)currentDutyIndex2+=totalPersons;
             saveConfig();
             updateDisplay();
 
         });
 
         connect(rotateAction, &QAction::triggered, this, [=]() {
-            currentDutyIndex1 = (currentDutyIndex1 + 2) % 47;
-            currentDutyIndex2 = (currentDutyIndex2 + 2) % 47;
+            currentDutyIndex1 = (currentDutyIndex1 + 2) % totalPersons;
+            currentDutyIndex2 = (currentDutyIndex2 + 2) % totalPersons;
             // 确保两个人不同
             if (currentDutyIndex1 == currentDutyIndex2)
-                currentDutyIndex2 = (currentDutyIndex2 + 1) % 47;
+                currentDutyIndex2 = (currentDutyIndex2 + 1) % totalPersons;
 
             // 保存配置
             saveConfig();
@@ -610,6 +610,7 @@ private:
         originIndex2 = config.value("origin/index2", 1).toInt();
 
         isTestingMode = config.value("settings/testingMode", false).toBool();
+        totalPersons = config.value("settings/totalPersons", 47).toInt();
 
         // 如果配置文件不存在，创建默认配置
         if (!QFile::exists(configFilePath)) {
@@ -629,6 +630,7 @@ private:
         config.setValue("origin/index2", originIndex2);
 
         config.setValue("settings/testingMode", isTestingMode);
+        config.setValue("settings/totalPersons", totalPersons);
 
         config.sync();
     }
@@ -647,6 +649,7 @@ private:
     int currentDutyIndex1 = 0;
     int currentDutyIndex2 = 1;
     QString lastUpdateDate;
+    int totalPersons = 47;
 };
 
 int main(int argc, char *argv[])
