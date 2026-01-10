@@ -701,7 +701,9 @@ private:
     void saveConfig()
     {
         QSettings config(configFilePath, QSettings::IniFormat);
-
+        
+        config.clear(); // 清除旧配置
+        
         config.setValue("duty/index1", currentDutyIndex1);
         config.setValue("duty/index2", currentDutyIndex2);
         config.setValue("date/lastUpdate", lastUpdateDate);
@@ -715,6 +717,26 @@ private:
         config.setValue("settings/startupLaunch", isStartupLaunch);
 
         config.sync();
+        QFile file(configFilePath);
+        if (file.open(QIODevice::ReadWrite | QIODevice::Text)) {
+            QByteArray firstLine = file.readLine();
+            file.seek(0);  // 重置到文件开头
+        
+            // 如果第一行已经是注释，则直接返回
+            if (firstLine.startsWith(";")) {
+                qDebug() << "配置文件已有注释，跳过添加注释步骤。";
+                file.close();
+                return;
+            }
+            QByteArray content = file.readAll();
+            file.seek(0);
+            QTextStream out(&file);
+            out << "; 值日安排配置文件\n; index1 和 index2 是当前值日的编号（从0开始）\n; lastUpdate 是上次更新的日期，格式为yyyyMMdd\n";
+            out << "; 不要修改以下origin字段，除非你知道自己在做什么！\n";
+            out << "; testMode 指考试模式\n; totalPersons 是总人数\n; isStartupLaunch 是开机启动状态\n";
+            out << content;
+            file.close();
+        }
     }
 
     // 成员变量
