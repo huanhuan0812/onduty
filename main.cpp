@@ -20,8 +20,20 @@
 #include <QPropertyAnimation>
 #include <QGraphicsOpacityEffect>
 #include <QUdpSocket>
+#include <QDesktopServices>
+#include <QUrl>
+#include <QStandardPaths>
 #ifdef Q_OS_WIN
 #include <windows.h>
+#include <objbase.h>
+#include <shobjidl.h>
+#include <shlobj.h>
+#include <objidl.h>
+#include <knownfolders.h>
+#include <shlwapi.h>
+
+#pragma comment(lib, "shlwapi.lib")
+
 #endif
 #ifdef Q_OS_MAC
 //#include <AppKit/AppKit.h>
@@ -40,6 +52,15 @@ public:
         setAttribute(Qt::WA_TransparentForMouseEvents, true);
         loadConfig();
         setupUI();
+
+        //检查开机启动
+        QString startupPath = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation) + "/Startup/onduty.lnk";
+        if(QFileInfo::exists(startupPath)){
+            isStartupLaunch = true;
+        }else{
+            isStartupLaunch = false;
+        }
+
         setupTrayIcon();
         if(!isTestingMode){
             checkAndUpdateDuty(); // 在启动时检查并更新值日
@@ -466,6 +487,15 @@ private:
             toggleTestingModeAction->setText("启用考试模式");
         else
             toggleTestingModeAction->setText("禁用考试模式");
+        QMenu *settingsMenu = new QMenu("设置", this);
+        QAction *openConfigAction = new QAction("打开配置文件", this);
+        QAction *createLaunchAction = new QAction(this);
+        if(!isStartupLaunch)
+            createLaunchAction->setText("创建开机启动项");
+        else
+            createLaunchAction->setText("移除开机启动项");
+        settingsMenu->addAction(openConfigAction);
+        settingsMenu->addAction(createLaunchAction);
         QAction *quitAction = new QAction("退出", this);
 
         connect(trayIcon, &QSystemTrayIcon::activated, this, [=](QSystemTrayIcon::ActivationReason reason){
@@ -568,12 +598,61 @@ private:
             }
         });
 
+        connect(openConfigAction, &QAction::triggered, this, [=]() {
+            QString configPath = QDir::toNativeSeparators(configFilePath);
+            QDesktopServices::openUrl(QUrl::fromLocalFile(configPath));
+        });
+        
+        connect(createLaunchAction, &QAction::triggered, this, [=]() {
+            if(isStartupLaunch){
+                // 移除开机启动项
+                QString startupPath = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation) + "/Startup/onduty.lnk";
+                if (QFile::remove(startupPath)) {
+                    QMessageBox::information(this, "移除成功", "已移除开机启动项。");
+                    isStartupLaunch = false;
+                    createLaunchAction->setText("创建开机启动项");
+                    saveConfig();
+                } else {
+                    QMessageBox::warning(this, "移除失败", "无法移除开机启动项。");
+                }
+            }
+            else{
+                // 创建开机启动项
+                QString appPath = QCoreApplication::applicationFilePath();
+                QString shortcutPath;
+
+                #ifdef Q_OS_WIN
+                QString startupFolder = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation) + "/Startup";
+                //QDir().mkpath(startupFolder);
+                QString shortcutPath = startupFolder + "/onduty.lnk";
+
+                // 使用 QFile::link() 创建快捷方式
+                bool success = QFile::link(appPath, shortcutPath);
+
+                if (success) {
+                    QMessageBox::information(this, "快捷方式创建成功", "已在开机启动文件夹创建快捷方式。");
+                    isStartupLaunch = true;
+                    createLaunchAction->setText("移除开机启动项");
+                    saveConfig();
+                } else {
+                    QMessageBox::warning(this, "快捷方式创建失败", "无法创建快捷方式。");
+                }
+                #elif defined(Q_OS_MAC)
+                QMessageBox::information(this, "提示", "暂不支持Mac平台的开机启动项创建。");
+                #else
+                QMessageBox::information(this, "提示", "暂不支持此平台的开机启动项创建。");
+                #endif
+            }
+        });
+
         trayMenu->addAction(updateAction);
         trayMenu->addAction(lastDutyAction);
         trayMenu->addAction(rotateAction);
         trayMenu->addAction(BackupAction);
         trayMenu->addAction(toggleAction);
         trayMenu->addAction(toggleTestingModeAction);
+        trayMenu->addSeparator();
+        trayMenu->addMenu(settingsMenu);
         trayMenu->addSeparator();
         trayMenu->addAction(quitAction);
 
@@ -611,6 +690,7 @@ private:
 
         isTestingMode = config.value("settings/testingMode", false).toBool();
         totalPersons = config.value("settings/totalPersons", 47).toInt();
+        isStartupLaunch = config.value("settings/startupLaunch", false).toBool();
 
         // 如果配置文件不存在，创建默认配置
         if (!QFile::exists(configFilePath)) {
@@ -632,6 +712,8 @@ private:
         config.setValue("settings/testingMode", isTestingMode);
         config.setValue("settings/totalPersons", totalPersons);
 
+        config.setValue("settings/startupLaunch", isStartupLaunch);
+
         config.sync();
     }
 
@@ -644,6 +726,7 @@ private:
     QString configFilePath;
     bool wasHiddenByFullscreen = false;
     bool wasHiddenByPPT = false;
+    bool isStartupLaunch = false;
     QGraphicsOpacityEffect *opacityEffect;  // 添加透明度效果对象
     int originIndex1=0, originIndex2=1;
     int currentDutyIndex1 = 0;
@@ -656,6 +739,9 @@ int main(int argc, char *argv[])
 {
     QApplication app(argc, argv);
     app.setQuitOnLastWindowClosed(false);
+    app.setApplicationName("值日安排");
+    app.setApplicationVersion("1.1");
+    app.setWindowIcon(QIcon(":/board.png")); 
 
     DutyRosterApp window;
 
