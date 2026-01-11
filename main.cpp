@@ -498,7 +498,7 @@ private:
         settingsMenu->addAction(createLaunchAction);
         QAction *quitAction = new QAction("退出", this);
 
-        connect(trayIcon, &QSystemTrayIcon::activated, this, [=](QSystemTrayIcon::ActivationReason reason){
+        connect(trayIcon, &QSystemTrayIcon::activated, this, [=,this](QSystemTrayIcon::ActivationReason reason){
             if (reason == QSystemTrayIcon::Trigger) // 左键单击
             {
                 // 获取托盘图标的位置并显示菜单
@@ -532,7 +532,7 @@ private:
             toggleAction->setEnabled(true);
         }
 
-        connect(toggleTestingModeAction, &QAction::triggered, this, [=]() {
+        connect(toggleTestingModeAction, &QAction::triggered, this, [=,this]() {
             isTestingMode = !isTestingMode;
             if (isTestingMode){
                 toggleTestingModeAction->setText("禁用考试模式");
@@ -564,7 +564,7 @@ private:
         });
         connect(updateAction, &QAction::triggered, this, &DutyRosterApp::checkAndUpdateDuty);
 
-        connect(lastDutyAction, &QAction::triggered, this, [=]()
+        connect(lastDutyAction, &QAction::triggered, this, [=,this]()
         {
             currentDutyIndex1 -= 2 ;
             currentDutyIndex2 -= 2;
@@ -575,7 +575,7 @@ private:
 
         });
 
-        connect(rotateAction, &QAction::triggered, this, [=]() {
+        connect(rotateAction, &QAction::triggered, this, [=,this]() {
             currentDutyIndex1 = (currentDutyIndex1 + 2) % totalPersons;
             currentDutyIndex2 = (currentDutyIndex2 + 2) % totalPersons;
             // 确保两个人不同
@@ -589,7 +589,7 @@ private:
         connect(toggleAction, &QAction::triggered, this, &DutyRosterApp::toggleVisibility);
         connect(quitAction, &QAction::triggered, this, &DutyRosterApp::quitApplication);
 
-        connect(BackupAction, &QAction::triggered, this, [=](){
+        connect(BackupAction, &QAction::triggered, this, [=,this](){
             if(isTestingMode){
                 currentDutyIndex1 = originIndex1;
                 currentDutyIndex2 = originIndex2;
@@ -598,12 +598,12 @@ private:
             }
         });
 
-        connect(openConfigAction, &QAction::triggered, this, [=]() {
+        connect(openConfigAction, &QAction::triggered, this, [=,this]() {
             QString configPath = QDir::toNativeSeparators(configFilePath);
             QDesktopServices::openUrl(QUrl::fromLocalFile(configPath));
         });
         
-        connect(createLaunchAction, &QAction::triggered, this, [=]() {
+        connect(createLaunchAction, &QAction::triggered, this, [=,this]() {
             if(isStartupLaunch){
                 // 移除开机启动项
                 QString startupPath = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation) + "/Startup/onduty.lnk";
@@ -624,7 +624,7 @@ private:
                 #ifdef Q_OS_WIN
                 QString startupFolder = QStandardPaths::writableLocation(QStandardPaths::ApplicationsLocation) + "/Startup";
                 //QDir().mkpath(startupFolder);
-                QString shortcutPath = startupFolder + "/onduty.lnk";
+                shortcutPath = startupFolder + "/onduty.lnk";
 
                 // 使用 QFile::link() 创建快捷方式
                 bool success = QFile::link(appPath, shortcutPath);
