@@ -734,6 +734,8 @@ private:
             out << "; 值日安排配置文件\n; index1 和 index2 是当前值日的编号（从0开始）\n; lastUpdate 是上次更新的日期，格式为yyyyMMdd\n";
             out << "; 不要修改以下origin字段，除非你知道自己在做什么！\n";
             out << "; testMode 指考试模式\n; totalPersons 是总人数\n; isStartupLaunch 是开机启动状态\n";
+            out << ";在修改配置文件前确保关闭本程序，避免配置覆盖！\n";
+            out << "; 检查系统中是否开启Deepfreeze，如有，请使用MeltdownDFC工具关闭后再使用本程序！\n";
             out << content;
             file.close();
         }
